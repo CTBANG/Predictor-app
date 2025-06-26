@@ -95,15 +95,15 @@ if ticker:
         st.plotly_chart(fig1, use_container_width=True)
 
         fig2 = px.line(stock_data, x=stock_data.index, y="RSI", title=f"{ticker} Relative Strength Index (RSI)")
-        fig2.update_layout(xaxis_title="Date", yaxis_title="RSI (14-day)")
+        fig2.update_layout(xaxis_title="Date", yaxis_title="RSI (14-day)", legend_title_text='')
         st.plotly_chart(fig2, use_container_width=True)
 
         fig3 = px.line(stock_data, x=stock_data.index, y="MACD", title=f"{ticker} MACD (12-26 EMA)")
-        fig3.update_layout(xaxis_title="Date", yaxis_title="MACD Value")
+        fig3.update_layout(xaxis_title="Date", yaxis_title="MACD Value", legend_title_text='')
         st.plotly_chart(fig3, use_container_width=True)
 
         fig4 = px.bar(stock_data, x=stock_data.index, y="Volume", title=f"{ticker} Daily Trading Volume")
-        fig4.update_layout(xaxis_title="Date", yaxis_title="Shares Traded")
+        fig4.update_layout(xaxis_title="Date", yaxis_title="Shares Traded", legend_title_text='')
         st.plotly_chart(fig4, use_container_width=True)
 
     pol_data = load_politician_data()
