@@ -37,6 +37,9 @@ def compute_rsi(series, period):
 st.set_page_config(layout="wide")
 st.title("📊 Real-Time Stock + Politician Trading Insights")
 
+# Debug marker
+st.markdown("**DEBUG: button rendered**")
+
 # Manual scraper run button
 if st.button("🔄 Manually Update Politician Trades"):
     with st.spinner("Running scraper..."):
@@ -45,6 +48,7 @@ if st.button("🔄 Manually Update Politician Trades"):
             st.success("Politician trade data updated!")
         except Exception as e:
             st.error(f"Failed to run scraper: {e}")
+            st.write(e)
 
 ticker = st.text_input("Enter stock ticker:", "AAPL").upper()
 if ticker:
