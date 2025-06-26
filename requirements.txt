@@ -1,9 +1,11 @@
 streamlit
-pandas
 yfinance
+pandas
+numpy
 scikit-learn
-joblib
 plotly
+joblib
 vaderSentiment
+feedparser
+requests
 transformers
-newsapi-python
