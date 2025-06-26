@@ -15,7 +15,7 @@ if ticker:
         if data.empty or 'Close' not in data.columns:
             st.error("Could not find 'Close' price in data. Ticker may be invalid or unavailable.")
         else:
-            # Indicators
+            # Add indicators
             data['SMA_20'] = data['Close'].rolling(window=20).mean()
             data['SMA_50'] = data['Close'].rolling(window=50).mean()
 
@@ -30,45 +30,49 @@ if ticker:
             data['MACD'] = exp1 - exp2
             data['Signal_Line'] = data['MACD'].ewm(span=9, adjust=False).mean()
 
-            # Closing Price
+            # --- Closing Price ---
             st.subheader("📊 Closing Price")
             st.line_chart(data['Close'])
 
-            # SMA
+            # --- SMA ---
             st.subheader("🟣 SMA 20 vs SMA 50")
             try:
-                sma_data = data[['SMA_20', 'SMA_50']].copy()
-                if sma_data.dropna().empty:
-                    st.warning("SMA data not available yet.")
+                if 'SMA_20' in data.columns and 'SMA_50' in data.columns:
+                    sma_df = pd.DataFrame({
+                        'SMA_20': data['SMA_20'],
+                        'SMA_50': data['SMA_50']
+                    }).dropna()
+                    if not sma_df.empty:
+                        st.line_chart(sma_df)
+                    else:
+                        st.warning("SMA values are not available yet (too few data points).")
                 else:
-                    st.line_chart(sma_data.dropna())
-            except KeyError as e:
-                st.error(f"Missing SMA columns: {e}")
+                    st.warning("SMA columns not found in data.")
+            except Exception as e:
+                st.error(f"Unexpected error plotting SMA: {e}")
 
-            # RSI
+            # --- RSI ---
             st.subheader("📉 RSI (Relative Strength Index)")
-            if 'RSI' in data.columns and not data['RSI'].dropna().empty:
+            if 'RSI' in data.columns:
                 st.line_chart(data['RSI'].dropna())
-            else:
-                st.warning("RSI data not available yet.")
 
-            # MACD
+            # --- MACD ---
             st.subheader("📈 MACD vs Signal Line")
-            if all(col in data.columns for col in ['MACD', 'Signal_Line']):
-                macd_data = data[['MACD', 'Signal_Line']].dropna()
-                if not macd_data.empty:
-                    st.line_chart(macd_data)
+            if 'MACD' in data.columns and 'Signal_Line' in data.columns:
+                macd_df = pd.DataFrame({
+                    'MACD': data['MACD'],
+                    'Signal_Line': data['Signal_Line']
+                }).dropna()
+                if not macd_df.empty:
+                    st.line_chart(macd_df)
                 else:
                     st.warning("MACD values not available yet.")
             else:
-                st.warning("MACD columns missing.")
+                st.warning("MACD or Signal Line column missing.")
 
-            # Volume
+            # --- Volume ---
             st.subheader("🔊 Volume")
-            if 'Volume' in data.columns and not data['Volume'].dropna().empty:
-                st.line_chart(data['Volume'])
-            else:
-                st.warning("Volume data not available.")
+            st.line_chart(data['Volume'])
 
     except Exception as e:
         st.error(f"Unexpected error: {e}")
