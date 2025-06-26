@@ -3,10 +3,8 @@ import pandas as pd
 import yfinance as yf
 import datetime as dt
 import os
-import subprocess
-import plotly.express as px
-import plotly.graph_objects as go
 import joblib
+import plotly.graph_objects as go
 from transformers import pipeline
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
@@ -44,7 +42,6 @@ def train_and_save_model():
 
 # === APP CODE ===
 
-# Load politician trade data
 def load_politician_data():
     csv_path = "data/politician_trades.csv"
     if os.path.exists(csv_path):
@@ -55,18 +52,16 @@ def load_politician_data():
         return df
     return pd.DataFrame()
 
-# Compute RSI
 def compute_rsi(series, period):
     delta = series.diff()
     gain = delta.where(delta > 0, 0.0)
-    loss = -delta.where(delta > 0, 0.0)
+    loss = -delta.where(delta < 0, 0.0)
     avg_gain = gain.rolling(window=period).mean()
     avg_loss = loss.rolling(window=period).mean()
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-# Load historical stock data
 def get_stock_data(ticker, period="6mo"):
     try:
         df = yf.download(ticker, period=period, group_by='ticker')
@@ -95,7 +90,6 @@ def get_stock_data(ticker, period="6mo"):
     df["MACD"] = df["Close"].ewm(span=12, adjust=False).mean() - df["Close"].ewm(span=26, adjust=False).mean()
     return df
 
-# Load ML model
 def load_model():
     try:
         model = joblib.load("models/predictor_model.pkl")
@@ -104,51 +98,56 @@ def load_model():
         st.warning("⚠️ ML model not found or failed to load.")
         return None
 
-# Load sentiment pipeline (e.g., from transformers)
 def load_sentiment_pipeline():
     try:
         return pipeline("sentiment-analysis")
     except:
         return None
 
-# === Streamlit UI ===
+# === STREAMLIT UI ===
 st.set_page_config(page_title="Stock Predictor", layout="wide")
 st.title("📈 Stock Movement Predictor")
 st.write("Use the sidebar to train model or load stock data.")
 
-# Sidebar for inputs
 with st.sidebar:
     st.header("Options")
     ticker = st.text_input("Enter Ticker Symbol", "AAPL")
     period = st.selectbox("Select Period", ["1mo", "3mo", "6mo", "1y"], index=2)
     show_train = st.button("Train Model")
 
-# Train model if selected
 if show_train:
     with st.spinner("Training model..."):
         train_and_save_model()
     st.success("Model trained and saved.")
 
-# Load and display stock data
 if ticker:
     df = get_stock_data(ticker, period)
     if not df.empty:
-        st.subheader(f"Stock Data: {ticker}")
-        st.line_chart(df["Close"], use_container_width=True)
+        st.subheader(f"📊 Stock Data: {ticker}")
+        st.plotly_chart(go.Figure(go.Scatter(x=df.index, y=df["Close"], name="Close")), use_container_width=True)
 
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df.index, y=df["SMA_20"], mode='lines', name='SMA 20'))
-        fig.add_trace(go.Scatter(x=df.index, y=df["SMA_50"], mode='lines', name='SMA 50'))
-        st.plotly_chart(fig, use_container_width=True)
+        st.subheader("📈 Moving Averages")
+        fig_ma = go.Figure()
+        fig_ma.add_trace(go.Scatter(x=df.index, y=df["SMA_20"], mode='lines', name='SMA 20'))
+        fig_ma.add_trace(go.Scatter(x=df.index, y=df["SMA_50"], mode='lines', name='SMA 50'))
+        st.plotly_chart(fig_ma, use_container_width=True)
 
-        st.subheader("Indicators")
-        st.line_chart(df["RSI"], use_container_width=True)
-        st.line_chart(df["MACD"], use_container_width=True)
+        st.subheader("📉 RSI and MACD Indicators")
+        fig_indicators = go.Figure()
+        fig_indicators.add_trace(go.Scatter(x=df.index, y=df["RSI"], mode='lines', name='RSI'))
+        fig_indicators.add_trace(go.Scatter(x=df.index, y=df["MACD"], mode='lines', name='MACD'))
+        st.plotly_chart(fig_indicators, use_container_width=True)
 
         model = load_model()
         if model:
             features = df[["SMA_20", "SMA_50", "RSI", "MACD"]].dropna()
             if not features.empty:
                 preds = model.predict(features)
-                st.subheader("Prediction (1 = Up, 0 = Down)")
-                st.line_chart(preds, use_container_width=True)
+                preds_df = pd.DataFrame({"Date": features.index, "Prediction": preds})
+                st.subheader("🤖 Model Predictions")
+                fig_preds = go.Figure(go.Scatter(x=preds_df["Date"], y=preds_df["Prediction"], mode='lines+markers', name='Prediction'))
+                fig_preds.update_layout(yaxis=dict(tickmode='array', tickvals=[0, 1], ticktext=['Down', 'Up']))
+                st.plotly_chart(fig_preds, use_container_width=True)
+
+                # Optional: Show prediction accuracy from training phase if retrained
+                st.info("Prediction shown for each trading day as Up (1) or Down (0).")
