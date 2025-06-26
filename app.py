@@ -42,11 +42,8 @@ def train_and_save_model():
     joblib.dump(model, "models/predictor_model.pkl")
     print("Model saved to models/predictor_model.pkl")
 
-# Uncomment below to train model directly from Streamlit if needed
-# if st.sidebar.button("Train ML Model"):
-#     train_and_save_model()
-
 # === APP CODE ===
+
 # Load politician trade data
 def load_politician_data():
     csv_path = "data/politician_trades.csv"
@@ -114,4 +111,44 @@ def load_sentiment_pipeline():
     except:
         return None
 
-# ... rest of the Streamlit app logic remains unchanged ...
+# === Streamlit UI ===
+st.set_page_config(page_title="Stock Predictor", layout="wide")
+st.title("📈 Stock Movement Predictor")
+st.write("Use the sidebar to train model or load stock data.")
+
+# Sidebar for inputs
+with st.sidebar:
+    st.header("Options")
+    ticker = st.text_input("Enter Ticker Symbol", "AAPL")
+    period = st.selectbox("Select Period", ["1mo", "3mo", "6mo", "1y"], index=2)
+    show_train = st.button("Train Model")
+
+# Train model if selected
+if show_train:
+    with st.spinner("Training model..."):
+        train_and_save_model()
+    st.success("Model trained and saved.")
+
+# Load and display stock data
+if ticker:
+    df = get_stock_data(ticker, period)
+    if not df.empty:
+        st.subheader(f"Stock Data: {ticker}")
+        st.line_chart(df["Close"], use_container_width=True)
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df.index, y=df["SMA_20"], mode='lines', name='SMA 20'))
+        fig.add_trace(go.Scatter(x=df.index, y=df["SMA_50"], mode='lines', name='SMA 50'))
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.subheader("Indicators")
+        st.line_chart(df["RSI"], use_container_width=True)
+        st.line_chart(df["MACD"], use_container_width=True)
+
+        model = load_model()
+        if model:
+            features = df[["SMA_20", "SMA_50", "RSI", "MACD"]].dropna()
+            if not features.empty:
+                preds = model.predict(features)
+                st.subheader("Prediction (1 = Up, 0 = Down)")
+                st.line_chart(preds, use_container_width=True)
