@@ -1,7 +1,8 @@
 streamlit
-yfinance
 pandas
+yfinance
 plotly
-joblib
+scikit-learn
 transformers
-torch
+joblib
+torch  # required by transformers
