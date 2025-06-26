@@ -26,28 +26,19 @@ def compute_rsi(series, period):
 
 # Load historical stock data
 def get_stock_data(ticker, period="6mo"):
-    df = yf.download(ticker, period=period, auto_adjust=True)
-    
-    # Flatten multi-index columns if needed
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = ['_'.join(col).strip() for col in df.columns.values]
+    df = yf.download(ticker, period=period)
+    if df.empty:
+        return df
 
-    # Confirm expected columns exist
-    if "Close" in df.columns and "Volume" in df.columns:
-        df["SMA_20"] = df["Close"].rolling(window=20).mean()
-        df["SMA_50"] = df["Close"].rolling(window=50).mean()
-        df["RSI"] = compute_rsi(df["Close"], 14)
-        df["MACD"] = df["Close"].ewm(span=12, adjust=False).mean() - df["Close"].ewm(span=26, adjust=False).mean()
-    else:
-        st.error("Required columns (Close, Volume) not found in stock data.")
+    df["SMA_20"] = df["Close"].rolling(window=20).mean()
+    df["SMA_50"] = df["Close"].rolling(window=50).mean()
+    df["RSI"] = compute_rsi(df["Close"], 14)
+    df["MACD"] = df["Close"].ewm(span=12, adjust=False).mean() - df["Close"].ewm(span=26, adjust=False).mean()
     return df
 
 # Streamlit UI
 st.set_page_config(layout="wide")
 st.title("📊 Real-Time Stock + Politician Trading Insights")
-
-# Debug marker
-st.markdown("**DEBUG: UI loaded, button rendered**")
 
 # Manual scraper run button
 if st.button("🔄 Manually Update Politician Trades"):
@@ -57,42 +48,49 @@ if st.button("🔄 Manually Update Politician Trades"):
             st.success("Politician trade data updated!")
         except Exception as e:
             st.error(f"Failed to run scraper: {e}")
-            st.exception(e)
+            st.write(e)
 
+# Input ticker
 ticker = st.text_input("Enter stock ticker:", "AAPL").upper()
 
 if ticker:
     stock_data = get_stock_data(ticker)
-    if not stock_data.empty:
+    
+    if stock_data.empty:
+        st.error("Failed to load stock data.")
+    else:
         st.subheader(f"📈 Price & Indicators for {ticker}")
-        try:
-            st.line_chart(stock_data[["Close", "SMA_20", "SMA_50"]].dropna())
-        except KeyError as e:
-            st.error(f"Missing SMA columns: {e}")
+        
+        # Check and plot Close + SMA
+        required_sma_cols = ["Close", "SMA_20", "SMA_50"]
+        if all(col in stock_data.columns for col in required_sma_cols):
+            st.line_chart(stock_data[required_sma_cols].dropna())
+        else:
+            st.error(f"Missing SMA columns: {[col for col in required_sma_cols if col not in stock_data.columns]}")
 
-        try:
+        # Check and plot RSI
+        if "RSI" in stock_data.columns:
             st.line_chart(stock_data[["RSI"]].dropna())
-        except KeyError as e:
-            st.error(f"Missing RSI column: {e}")
+        else:
+            st.error("Missing RSI column.")
 
-        try:
+        # Check and plot MACD
+        if "MACD" in stock_data.columns:
             st.line_chart(stock_data[["MACD"]].dropna())
-        except KeyError as e:
-            st.error(f"Missing MACD column: {e}")
+        else:
+            st.error("Missing MACD column.")
 
-        try:
+        # Check and plot Volume
+        if "Volume" in stock_data.columns:
             st.bar_chart(stock_data[["Volume"]].dropna())
-        except KeyError as e:
-            st.error(f"Missing Volume column: {e}")
+        else:
+            st.error("Missing Volume column.")
 
-    # Load and display relevant politician trades
-    pol_data = load_politician_data()
-    if not pol_data.empty:
-        pol_data_ticker = pol_data[pol_data["ticker"].str.upper() == ticker]
-        st.subheader(f"🧑‍⚖️ Trades by Top 10 Politicians in {ticker}")
-        if not pol_data_ticker.empty:
+        # Load and display politician data
+        pol_data = load_politician_data()
+        if not pol_data.empty:
+            pol_data_ticker = pol_data[pol_data["ticker"].str.upper() == ticker]
+            st.subheader(f"🧑‍⚖️ Trades by Top 10 Politicians in {ticker}")
             st.dataframe(pol_data_ticker.sort_values(by="transaction_date", ascending=False))
         else:
-            st.info("No recent trades in this ticker by top politicians.")
-    else:
-        st.warning("⚠️ No politician trade data found.")
+            st.warning("⚠️ No politician trade data found.")
