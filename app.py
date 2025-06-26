@@ -11,23 +11,21 @@ ticker = st.text_input("Enter a stock ticker (e.g., AAPL):").upper()
 
 if ticker:
     try:
-        # Fetch data
-        data = yf.download(ticker, period="6mo", interval="1d")
+        # Fetch data (force flat columns)
+        data = yf.download(ticker, period="6mo", interval="1d", group_by='column')
 
-        # Fix MultiIndex columns (flatten them)
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = ['_'.join(col).strip() for col in data.columns.values]
-
-        # Ensure 'Close' column exists
-        if not any(col.lower() == "close" or col.endswith("_close") for col in data.columns):
-            st.error("Could not find 'Close' price in data. Ticker may be invalid or unavailable.")
+        # Check if data is empty
+        if data.empty:
+            st.error("No data returned. Ticker may be invalid or unavailable.")
             st.stop()
 
-        # Find correct close column
-        close_col = next((col for col in data.columns if col.lower() == "close" or col.endswith("_close")), None)
-        data["Close"] = data[close_col]
+        # Check if 'Close' exists
+        if "Close" not in data.columns:
+            st.error("'Close' price column not found.")
+            st.dataframe(data.head())  # show what's there for debugging
+            st.stop()
 
-        # Show raw preview
+        # Debug preview
         st.write("Raw Data Preview:")
         st.dataframe(data.head())
 
@@ -46,18 +44,12 @@ if ticker:
         st.line_chart(data["Close"])
 
         st.subheader("📈 SMA 20 vs SMA 50")
-        sma_cols = ["SMA_20", "SMA_50"]
-        if all(col in data.columns for col in sma_cols):
-            st.line_chart(data[sma_cols].dropna())
-        else:
-            st.warning("SMA columns not available.")
+        sma_df = data[["SMA_20", "SMA_50"]].dropna()
+        st.line_chart(sma_df)
 
         st.subheader("📉 MACD & Signal Line")
-        macd_cols = ["MACD", "Signal"]
-        if all(col in data.columns for col in macd_cols):
-            st.line_chart(data[macd_cols].dropna())
-        else:
-            st.warning("MACD columns not available.")
+        macd_df = data[["MACD", "Signal"]].dropna()
+        st.line_chart(macd_df)
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
