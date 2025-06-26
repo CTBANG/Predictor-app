@@ -27,26 +27,23 @@ def compute_rsi(series, period):
 # Load historical stock data
 def get_stock_data(ticker, period="6mo"):
     try:
-        df = yf.download(ticker, period=period, group_by="ticker", auto_adjust=True)
+        df = yf.download(ticker, period=period, group_by='ticker')
     except Exception as e:
         st.error(f"Error downloading data for {ticker}: {e}")
         return pd.DataFrame()
 
-    if df.empty or ticker not in df.columns.levels[-1]:
-        st.error(f"No data returned or missing expected columns for ticker {ticker}.")
-        st.dataframe(df.head())
-        return pd.DataFrame()
+    if df.empty:
+        st.error(f"No data returned for {ticker}. Please check the ticker symbol.")
+        return df
 
-    try:
-        df = df.xs(ticker, axis=1, level=1)  # flatten MultiIndex to single columns
-    except Exception as e:
-        st.error(f"Could not extract data for {ticker}: {e}")
-        return pd.DataFrame()
+    # Flatten columns if multi-indexed
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
 
     required_cols = {"Close", "Volume"}
     if not required_cols.issubset(df.columns):
         st.error(f"Missing required columns in downloaded data: {required_cols - set(df.columns)}")
-        st.dataframe(df.head())  # Show what was returned
+        st.dataframe(df.head())  # Show what was actually returned
         return pd.DataFrame()
 
     df["SMA_20"] = df["Close"].rolling(window=20).mean()
@@ -58,6 +55,9 @@ def get_stock_data(ticker, period="6mo"):
 # Streamlit UI
 st.set_page_config(layout="wide")
 st.title("📊 Real-Time Stock + Politician Trading Insights")
+
+# Debug marker
+st.markdown("**DEBUG: button rendered**")
 
 # Manual scraper run button
 if st.button("🔄 Manually Update Politician Trades"):
@@ -74,19 +74,13 @@ if ticker:
     stock_data = get_stock_data(ticker)
     if not stock_data.empty:
         st.subheader(f"📈 Price & Indicators for {ticker}")
-        st.dataframe(stock_data.tail())
-
         try:
-            if {"Close", "SMA_20", "SMA_50"}.issubset(stock_data.columns):
-                st.line_chart(stock_data[["Close", "SMA_20", "SMA_50"]].dropna())
-            if "RSI" in stock_data.columns:
-                st.line_chart(stock_data[["RSI"]].dropna())
-            if "MACD" in stock_data.columns:
-                st.line_chart(stock_data[["MACD"]].dropna())
-            if "Volume" in stock_data.columns:
-                st.bar_chart(stock_data[["Volume"]].dropna())
-        except Exception as e:
-            st.error(f"Chart rendering failed: {e}")
+            st.line_chart(stock_data[["Close", "SMA_20", "SMA_50"]].dropna())
+            st.line_chart(stock_data[["RSI"]].dropna())
+            st.line_chart(stock_data[["MACD"]].dropna())
+            st.bar_chart(stock_data[["Volume"]].dropna())
+        except KeyError as e:
+            st.error(f"Chart rendering failed due to missing data: {e}")
             st.dataframe(stock_data.head())
 
     # Load and display relevant politician trades
