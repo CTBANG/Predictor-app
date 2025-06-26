@@ -9,6 +9,10 @@ from transformers import pipeline
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+from newsapi import NewsApiClient
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+NEWS_API_KEY = os.getenv("NEWS_API_KEY", "your_default_news_api_key")
 
 # === TRAINING SCRIPT ===
 def train_and_save_model():
@@ -92,17 +96,26 @@ def get_stock_data(ticker, period="6mo"):
 
 def load_model():
     try:
-        model = joblib.load("models/predictor_model.pkl")
+        model_path = "models/predictor_model.pkl"
+        if not os.path.exists(model_path):
+            st.warning("⚠️ ML model not found. Auto-training...")
+            train_and_save_model()
+        model = joblib.load(model_path)
         return model
     except Exception as e:
-        st.warning("⚠️ ML model not found or failed to load.")
+        st.warning(f"⚠️ ML model not found or failed to load: {e}")
         return None
 
-def load_sentiment_pipeline():
-    try:
-        return pipeline("sentiment-analysis")
-    except:
-        return None
+def fetch_news_sentiment(query="stock market"):
+    newsapi = NewsApiClient(api_key=NEWS_API_KEY)
+    articles = newsapi.get_everything(q=query, language="en", sort_by="relevancy", page_size=20)
+    analyzer = SentimentIntensityAnalyzer()
+    sentiments = []
+    for article in articles["articles"]:
+        text = article["title"] + ". " + (article.get("description") or "")
+        score = analyzer.polarity_scores(text)["compound"]
+        sentiments.append({"source": article["source"]["name"], "title": article["title"], "score": score})
+    return sentiments
 
 # === STREAMLIT UI ===
 st.set_page_config(page_title="Stock Predictor", layout="wide")
@@ -124,12 +137,12 @@ if ticker:
     df = get_stock_data(ticker, period)
     if not df.empty:
         st.subheader(f"📊 Stock Data: {ticker}")
-        st.plotly_chart(go.Figure(go.Scatter(x=df.index, y=df["Close"], name="Close")), use_container_width=True)
+        st.plotly_chart(go.Figure(go.Scatter(x=df.index, y=df["Close"], name="Close Price")), use_container_width=True)
 
         st.subheader("📈 Moving Averages")
         fig_ma = go.Figure()
-        fig_ma.add_trace(go.Scatter(x=df.index, y=df["SMA_20"], mode='lines', name='SMA 20'))
-        fig_ma.add_trace(go.Scatter(x=df.index, y=df["SMA_50"], mode='lines', name='SMA 50'))
+        fig_ma.add_trace(go.Scatter(x=df.index, y=df["SMA_20"], mode='lines', name='20-Day SMA'))
+        fig_ma.add_trace(go.Scatter(x=df.index, y=df["SMA_50"], mode='lines', name='50-Day SMA'))
         st.plotly_chart(fig_ma, use_container_width=True)
 
         st.subheader("📉 RSI and MACD Indicators")
@@ -148,10 +161,25 @@ if ticker:
                 fig_preds = go.Figure(go.Scatter(x=preds_df["Date"], y=preds_df["Prediction"], mode='lines+markers', name='Prediction'))
                 fig_preds.update_layout(yaxis=dict(tickmode='array', tickvals=[0, 1], ticktext=['Down', 'Up']))
                 st.plotly_chart(fig_preds, use_container_width=True)
-
                 st.info("Prediction shown for each trading day as Up (1) or Down (0).")
 
-# === TOP POLITICIAN PICKS (placeholder for future step) ===
+        st.subheader("📰 News Sentiment Overlay")
+        sentiments = fetch_news_sentiment(ticker)
+        if sentiments:
+            for entry in sentiments[:5]:
+                st.write(f"[{entry['source']}] {entry['title']} → **Sentiment**: {entry['score']:.2f}")
+        else:
+            st.warning("No sentiment data retrieved.")
+
+# === TOP POLITICIAN PICKS ===
 st.markdown("---")
-st.subheader("🏛️ Top Politician Trade Picks (Coming Soon)")
-st.info("This section will highlight the top 10 trade picks based on recent politician activity.")
+st.subheader("🏛️ Top Politician Trade Picks")
+
+df_politicians = load_politician_data()
+if not df_politicians.empty:
+    recent_trades = df_politicians.sort_values("transaction_date", ascending=False)
+    top_tickers = recent_trades["ticker"].value_counts().head(10).index.tolist()
+    st.write("Top 10 Tickers Recently Traded by Politicians:", top_tickers)
+    st.dataframe(recent_trades[recent_trades["ticker"].isin(top_tickers)][["politician", "ticker", "transaction_date", "transaction"]])
+else:
+    st.warning("No politician trade data found.")
