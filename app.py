@@ -4,6 +4,8 @@ import yfinance as yf
 import datetime as dt
 import os
 import subprocess
+import plotly.express as px
+import plotly.graph_objects as go
 
 # Load politician trade data
 def load_politician_data():
@@ -36,17 +38,15 @@ def get_stock_data(ticker, period="6mo"):
         st.error(f"No data returned for {ticker}. Please check the ticker symbol.")
         return df
 
-    # Flatten columns if multi-indexed
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(-1)
 
-    # Remove duplicate columns if present
     df = df.loc[:, ~df.columns.duplicated()]
 
     required_cols = {"Close", "Volume"}
     if not required_cols.issubset(df.columns):
         st.error(f"Missing required columns in downloaded data: {required_cols - set(df.columns)}")
-        st.dataframe(df.head())  # Show what was actually returned
+        st.dataframe(df.head())
         return pd.DataFrame()
 
     df["SMA_20"] = df["Close"].rolling(window=20).mean()
@@ -59,10 +59,8 @@ def get_stock_data(ticker, period="6mo"):
 st.set_page_config(layout="wide")
 st.title("📊 Real-Time Stock + Politician Trading Insights")
 
-# Debug marker
 st.markdown("**DEBUG: button rendered**")
 
-# Manual scraper run button
 if st.button("🔄 Manually Update Politician Trades"):
     with st.spinner("Running scraper..."):
         try:
@@ -77,16 +75,26 @@ if ticker:
     stock_data = get_stock_data(ticker)
     if not stock_data.empty:
         st.subheader(f"📈 Price & Indicators for {ticker}")
-        try:
-            st.line_chart(stock_data[["Close", "SMA_20", "SMA_50"]].dropna())
-            st.line_chart(stock_data[["RSI"]].dropna())
-            st.line_chart(stock_data[["MACD"]].dropna())
-            st.bar_chart(stock_data[["Volume"]].dropna())
-        except KeyError as e:
-            st.error(f"Chart rendering failed due to missing data: {e}")
-            st.dataframe(stock_data.head())
 
-    # Load and display relevant politician trades
+        fig1 = go.Figure()
+        fig1.add_trace(go.Scatter(x=stock_data.index, y=stock_data["Close"], mode='lines', name='Close'))
+        fig1.add_trace(go.Scatter(x=stock_data.index, y=stock_data["SMA_20"], mode='lines', name='SMA 20'))
+        fig1.add_trace(go.Scatter(x=stock_data.index, y=stock_data["SMA_50"], mode='lines', name='SMA 50'))
+        fig1.update_layout(title="Stock Price with SMA Indicators", xaxis_title="Date", yaxis_title="Price")
+        st.plotly_chart(fig1, use_container_width=True)
+
+        fig2 = px.line(stock_data, x=stock_data.index, y="RSI", title="Relative Strength Index (RSI)")
+        fig2.update_layout(xaxis_title="Date", yaxis_title="RSI")
+        st.plotly_chart(fig2, use_container_width=True)
+
+        fig3 = px.line(stock_data, x=stock_data.index, y="MACD", title="MACD (Moving Average Convergence Divergence)")
+        fig3.update_layout(xaxis_title="Date", yaxis_title="MACD")
+        st.plotly_chart(fig3, use_container_width=True)
+
+        fig4 = px.bar(stock_data, x=stock_data.index, y="Volume", title="Trading Volume")
+        fig4.update_layout(xaxis_title="Date", yaxis_title="Volume")
+        st.plotly_chart(fig4, use_container_width=True)
+
     pol_data = load_politician_data()
     if not pol_data.empty:
         pol_data_ticker = pol_data[pol_data["ticker"] == ticker]
