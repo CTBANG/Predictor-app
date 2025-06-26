@@ -2,45 +2,53 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 
-st.set_page_config(page_title="Stock Ticker Analyzer", layout="centered")
+# App Title
+st.set_page_config(page_title="Stock Ticker App", page_icon="📈")
 st.title("📈 Simple Stock Ticker App")
 
+# Input
 ticker = st.text_input("Enter a stock ticker (e.g., AAPL):")
 
-def compute_rsi(data, period=14):
-    delta = data['Close'].diff()
-    gain = delta.where(delta > 0, 0).rolling(window=period).mean()
-    loss = -delta.where(delta < 0, 0).rolling(window=period).mean()
-    rs = gain / loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
-
-def compute_macd(data):
-    exp1 = data['Close'].ewm(span=12, adjust=False).mean()
-    exp2 = data['Close'].ewm(span=26, adjust=False).mean()
-    macd = exp1 - exp2
-    signal = macd.ewm(span=9, adjust=False).mean()
-    return macd, signal
-
 if ticker:
+    # Download historical market data
     data = yf.download(ticker, period="6mo", interval="1d")
 
     if data.empty:
-        st.warning("⚠️ No data found for this ticker.")
-    elif 'Close' not in data.columns:
-        st.warning("⚠️ 'Close' price data is missing from the downloaded dataset.")
-        st.write("Here’s what was downloaded:")
-        st.dataframe(data)
+        st.error("No data found. Please enter a valid stock ticker.")
     else:
-        data["RSI"] = compute_rsi(data)
-        data["MACD"], data["Signal"] = compute_macd(data)
+        # Calculate indicators
+        data["SMA_20"] = data["Close"].rolling(window=20).mean()
+        data["SMA_50"] = data["Close"].rolling(window=50).mean()
 
+        delta = data["Close"].diff()
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        avg_gain = gain.rolling(window=14).mean()
+        avg_loss = loss.rolling(window=14).mean()
+        rs = avg_gain / avg_loss
+        data["RSI"] = 100 - (100 / (1 + rs))
+
+        ema12 = data["Close"].ewm(span=12, adjust=False).mean()
+        ema26 = data["Close"].ewm(span=26, adjust=False).mean()
+        data["MACD"] = ema12 - ema26
+        data["Signal"] = data["MACD"].ewm(span=9, adjust=False).mean()
+
+        # Output
         st.subheader(f"📊 Price and Volume for {ticker.upper()}")
         st.line_chart(data["Close"])
-        st.bar_chart(data["Volume"])
+        st.line_chart(data["Volume"])
+
+        st.subheader("📈 SMA 20 vs SMA 50")
+        st.line_chart(data[["SMA_20", "SMA_50"]])
 
         st.subheader("📉 RSI (Relative Strength Index)")
-        st.line_chart(data["RSI"])
+        if "RSI" in data.columns and data["RSI"].notnull().any():
+            st.line_chart(data["RSI"])
+        else:
+            st.warning("RSI data not available for this ticker.")
 
         st.subheader("📊 MACD vs Signal")
-        st.line_chart(data[["MACD", "Signal"]])
+        if all(col in data.columns for col in ["MACD", "Signal"]) and data[["MACD", "Signal"]].notnull().any().any():
+            st.line_chart(data[["MACD", "Signal"]])
+        else:
+            st.warning("MACD and Signal data not available.")
