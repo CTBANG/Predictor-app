@@ -59,9 +59,15 @@ def get_stock_data(ticker, period="6mo"):
 st.set_page_config(layout="wide")
 st.title("📊 Real-Time Stock + Politician Trading Insights")
 
-st.markdown("**DEBUG: button rendered**")
+if st.button("🔄 Refresh All Data"):
+    with st.spinner("Refreshing stock and politician data..."):
+        try:
+            subprocess.run(["python", "scraper_politicians.py"], check=True)
+            st.success("Data refreshed successfully!")
+        except Exception as e:
+            st.error(f"Failed to refresh data: {e}")
 
-if st.button("🔄 Manually Update Politician Trades"):
+if st.button("🔁 Manually Update Politician Trades"):
     with st.spinner("Running scraper..."):
         try:
             subprocess.run(["python", "scraper_politicians.py"], check=True)
