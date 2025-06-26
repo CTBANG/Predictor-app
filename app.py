@@ -2,20 +2,21 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 
-# App setup
+# App config
 st.set_page_config(page_title="Stock Ticker App", page_icon="📈")
 st.title("📈 Simple Stock Ticker App")
 
-# Input box
+# User input
 ticker = st.text_input("Enter a stock ticker (e.g., AAPL):")
 
 if ticker:
+    # Download historical data
     data = yf.download(ticker, period="6mo", interval="1d")
 
     if data.empty:
         st.error("No data found. Please enter a valid ticker.")
     else:
-        # Technical indicators
+        # Calculate indicators
         data["SMA_20"] = data["Close"].rolling(window=20).mean()
         data["SMA_50"] = data["Close"].rolling(window=50).mean()
 
@@ -32,31 +33,31 @@ if ticker:
         data["MACD"] = ema12 - ema26
         data["Signal"] = data["MACD"].ewm(span=9, adjust=False).mean()
 
-        # Display charts
+        # Charts
         st.subheader(f"📊 Price and Volume for {ticker.upper()}")
         st.line_chart(data["Close"])
         st.line_chart(data["Volume"])
 
-        # Safe plot: SMA
+        # SMA plot
         st.subheader("📈 SMA 20 vs SMA 50")
         sma_df = data[["SMA_20", "SMA_50"]].dropna()
         if not sma_df.empty:
             st.line_chart(sma_df)
         else:
-            st.warning("SMA data not available yet — not enough history.")
+            st.warning("SMA values not yet available — wait for more data.")
 
-        # Safe plot: RSI
+        # RSI plot
         st.subheader("📉 RSI (Relative Strength Index)")
         rsi_df = data[["RSI"]].dropna()
         if not rsi_df.empty:
             st.line_chart(rsi_df)
         else:
-            st.warning("RSI data not available yet.")
+            st.warning("RSI values not yet available.")
 
-        # Safe plot: MACD
+        # MACD plot
         st.subheader("📊 MACD vs Signal")
         macd_df = data[["MACD", "Signal"]].dropna()
         if not macd_df.empty:
             st.line_chart(macd_df)
         else:
-            st.warning("MACD data not available yet.")
+            st.warning("MACD values not yet available.")
