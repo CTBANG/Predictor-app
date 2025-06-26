@@ -3,6 +3,6 @@ pandas
 yfinance
 plotly
 scikit-learn
-transformers
 joblib
-torch  # required by transformers
+transformers
+torch
