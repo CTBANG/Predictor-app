@@ -149,5 +149,9 @@ if ticker:
                 fig_preds.update_layout(yaxis=dict(tickmode='array', tickvals=[0, 1], ticktext=['Down', 'Up']))
                 st.plotly_chart(fig_preds, use_container_width=True)
 
-                # Optional: Show prediction accuracy from training phase if retrained
                 st.info("Prediction shown for each trading day as Up (1) or Down (0).")
+
+# === TOP POLITICIAN PICKS (placeholder for future step) ===
+st.markdown("---")
+st.subheader("🏛️ Top Politician Trade Picks (Coming Soon)")
+st.info("This section will highlight the top 10 trade picks based on recent politician activity.")
