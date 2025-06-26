@@ -15,13 +15,13 @@ if ticker:
         if data.empty or 'Close' not in data.columns:
             st.error("Could not find 'Close' price in data. Ticker may be invalid or unavailable.")
         else:
-            # Compute Technical Indicators
+            # Compute Indicators
             data['SMA_20'] = data['Close'].rolling(window=20).mean()
             data['SMA_50'] = data['Close'].rolling(window=50).mean()
 
             delta = data['Close'].diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            gain = delta.where(delta > 0, 0).rolling(14).mean()
+            loss = -delta.where(delta < 0, 0).rolling(14).mean()
             rs = gain / loss
             data['RSI'] = 100 - (100 / (1 + rs))
 
@@ -30,34 +30,42 @@ if ticker:
             data['MACD'] = exp1 - exp2
             data['Signal_Line'] = data['MACD'].ewm(span=9, adjust=False).mean()
 
-            # Charts
+            # Plot 1: Closing Price
             st.subheader("📊 Closing Price")
             st.line_chart(data['Close'])
 
+            # Plot 2: SMA
             st.subheader("🟣 SMA 20 vs SMA 50")
             sma_df = data[['SMA_20', 'SMA_50']].dropna()
             if not sma_df.empty:
                 st.line_chart(sma_df)
             else:
-                st.warning("SMA values not yet available — wait for more data.")
+                st.warning("SMA data is not available yet (insufficient historical data).")
 
+            # Plot 3: RSI
             st.subheader("📉 RSI (Relative Strength Index)")
-            rsi = data[['RSI']].dropna()
-            if not rsi.empty:
-                st.line_chart(rsi)
+            if 'RSI' in data.columns and not data['RSI'].dropna().empty:
+                st.line_chart(data['RSI'].dropna())
             else:
-                st.warning("RSI values not available.")
+                st.warning("RSI data not available.")
 
-            st.subheader("📈 MACD (Moving Average Convergence Divergence)")
-            macd_df = data[['MACD', 'Signal_Line']].dropna()
-            if not macd_df.empty:
-                st.line_chart(macd_df)
+            # Plot 4: MACD
+            st.subheader("📈 MACD vs Signal Line")
+            if 'MACD' in data.columns and 'Signal_Line' in data.columns:
+                macd_data = data[['MACD', 'Signal_Line']].dropna()
+                if not macd_data.empty:
+                    st.line_chart(macd_data)
+                else:
+                    st.warning("MACD values not yet available.")
             else:
-                st.warning("MACD values not available.")
+                st.warning("MACD calculation failed.")
 
-            st.subheader("📊 Volume")
-            volume_df = data[['Volume']].dropna()
-            st.line_chart(volume_df)
+            # Plot 5: Volume
+            st.subheader("🔊 Volume")
+            if 'Volume' in data.columns and not data['Volume'].dropna().empty:
+                st.line_chart(data['Volume'])
+            else:
+                st.warning("Volume data not available.")
 
     except Exception as e:
         st.error(f"An unexpected error occurred: {e}")
