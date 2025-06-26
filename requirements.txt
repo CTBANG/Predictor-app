@@ -2,8 +2,8 @@ streamlit
 pandas
 yfinance
 plotly
-joblib
 scikit-learn
 transformers
-torch
-requests
+vaderSentiment
+newsapi-python
+joblib
