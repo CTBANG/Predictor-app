@@ -1,78 +1,66 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
-import numpy as np
+import yfinance as yf
+import datetime as dt
+import os
+import subprocess
 
-st.set_page_config(page_title="Stock Predictor", layout="wide")
-st.title("📈 Simple Stock Ticker App")
+# Load politician trade data
+def load_politician_data():
+    csv_path = "data/politician_trades.csv"
+    if os.path.exists(csv_path):
+        df = pd.read_csv(csv_path, parse_dates=["transaction_date"])
+        return df
+    return pd.DataFrame()
 
-ticker = st.text_input("Enter a stock ticker (e.g., AAPL):", value="AAPL").upper()
+# Load historical stock data
+def get_stock_data(ticker, period="6mo"):
+    df = yf.download(ticker, period=period)
+    df["SMA_20"] = df["Close"].rolling(window=20).mean()
+    df["SMA_50"] = df["Close"].rolling(window=50).mean()
+    df["RSI"] = compute_rsi(df["Close"], 14)
+    df["MACD"] = df["Close"].ewm(span=12, adjust=False).mean() - df["Close"].ewm(span=26, adjust=False).mean()
+    return df
 
+# Compute RSI
+def compute_rsi(series, period):
+    delta = series.diff()
+    gain = delta.where(delta > 0, 0.0)
+    loss = -delta.where(delta < 0, 0.0)
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+# Streamlit UI
+st.set_page_config(layout="wide")
+st.title("📊 Real-Time Stock + Politician Trading Insights")
+
+# Manual scraper run button
+if st.button("🔄 Manually Update Politician Trades"):
+    with st.spinner("Running scraper..."):
+        try:
+            subprocess.run(["python", "scraper_politicians.py"], check=True)
+            st.success("Politician trade data updated!")
+        except Exception as e:
+            st.error(f"Failed to run scraper: {e}")
+
+ticker = st.text_input("Enter stock ticker:", "AAPL").upper()
 if ticker:
-    try:
-        data = yf.download(ticker, period="6mo", interval="1d")
+    stock_data = get_stock_data(ticker)
+    if not stock_data.empty:
+        st.subheader(f"📈 Price & Indicators for {ticker}")
+        st.line_chart(stock_data[["Close", "SMA_20", "SMA_50"]].dropna())
+        st.line_chart(stock_data[["RSI"]].dropna())
+        st.line_chart(stock_data[["MACD"]].dropna())
+        st.bar_chart(stock_data[["Volume"]].dropna())
 
-        if data.empty or 'Close' not in data.columns:
-            st.error("Could not find 'Close' price in data. Ticker may be invalid or unavailable.")
-        else:
-            # Add indicators
-            data['SMA_20'] = data['Close'].rolling(window=20).mean()
-            data['SMA_50'] = data['Close'].rolling(window=50).mean()
-
-            delta = data['Close'].diff()
-            gain = delta.clip(lower=0).rolling(14).mean()
-            loss = -delta.clip(upper=0).rolling(14).mean()
-            rs = gain / loss
-            data['RSI'] = 100 - (100 / (1 + rs))
-
-            exp1 = data['Close'].ewm(span=12, adjust=False).mean()
-            exp2 = data['Close'].ewm(span=26, adjust=False).mean()
-            data['MACD'] = exp1 - exp2
-            data['Signal_Line'] = data['MACD'].ewm(span=9, adjust=False).mean()
-
-            # --- Closing Price ---
-            st.subheader("📊 Closing Price")
-            st.line_chart(data['Close'])
-
-            # --- SMA ---
-            st.subheader("🟣 SMA 20 vs SMA 50")
-            try:
-                if 'SMA_20' in data.columns and 'SMA_50' in data.columns:
-                    sma_df = pd.DataFrame({
-                        'SMA_20': data['SMA_20'],
-                        'SMA_50': data['SMA_50']
-                    }).dropna()
-                    if not sma_df.empty:
-                        st.line_chart(sma_df)
-                    else:
-                        st.warning("SMA values are not available yet (too few data points).")
-                else:
-                    st.warning("SMA columns not found in data.")
-            except Exception as e:
-                st.error(f"Unexpected error plotting SMA: {e}")
-
-            # --- RSI ---
-            st.subheader("📉 RSI (Relative Strength Index)")
-            if 'RSI' in data.columns:
-                st.line_chart(data['RSI'].dropna())
-
-            # --- MACD ---
-            st.subheader("📈 MACD vs Signal Line")
-            if 'MACD' in data.columns and 'Signal_Line' in data.columns:
-                macd_df = pd.DataFrame({
-                    'MACD': data['MACD'],
-                    'Signal_Line': data['Signal_Line']
-                }).dropna()
-                if not macd_df.empty:
-                    st.line_chart(macd_df)
-                else:
-                    st.warning("MACD values not available yet.")
-            else:
-                st.warning("MACD or Signal Line column missing.")
-
-            # --- Volume ---
-            st.subheader("🔊 Volume")
-            st.line_chart(data['Volume'])
-
-    except Exception as e:
-        st.error(f"Unexpected error: {e}")
+    # Load and display relevant politician trades
+    pol_data = load_politician_data()
+    if not pol_data.empty:
+        pol_data_ticker = pol_data[pol_data["ticker"] == ticker]
+        st.subheader(f"🧑‍⚖️ Trades by Top 10 Politicians in {ticker}")
+        st.dataframe(pol_data_ticker.sort_values(by="transaction_date", ascending=False))
+    else:
+        st.warning("No politician trade data found.")
