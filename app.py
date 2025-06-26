@@ -26,9 +26,21 @@ def compute_rsi(series, period):
 
 # Load historical stock data
 def get_stock_data(ticker, period="6mo"):
-    df = yf.download(ticker, period=period)
+    try:
+        df = yf.download(ticker, period=period)
+    except Exception as e:
+        st.error(f"Error downloading data for {ticker}: {e}")
+        return pd.DataFrame()
+
     if df.empty:
+        st.error(f"No data returned for {ticker}. Please check the ticker symbol.")
         return df
+
+    required_cols = {"Close", "Volume"}
+    if not required_cols.issubset(df.columns):
+        st.error(f"Missing required columns in downloaded data: {required_cols - set(df.columns)}")
+        st.dataframe(df.head())  # Show what was actually returned
+        return pd.DataFrame()
 
     df["SMA_20"] = df["Close"].rolling(window=20).mean()
     df["SMA_50"] = df["Close"].rolling(window=50).mean()
@@ -40,6 +52,9 @@ def get_stock_data(ticker, period="6mo"):
 st.set_page_config(layout="wide")
 st.title("📊 Real-Time Stock + Politician Trading Insights")
 
+# Debug marker
+st.markdown("**DEBUG: button rendered**")
+
 # Manual scraper run button
 if st.button("🔄 Manually Update Politician Trades"):
     with st.spinner("Running scraper..."):
@@ -50,47 +65,25 @@ if st.button("🔄 Manually Update Politician Trades"):
             st.error(f"Failed to run scraper: {e}")
             st.write(e)
 
-# Input ticker
 ticker = st.text_input("Enter stock ticker:", "AAPL").upper()
-
 if ticker:
     stock_data = get_stock_data(ticker)
-    
-    if stock_data.empty:
-        st.error("Failed to load stock data.")
-    else:
+    if not stock_data.empty:
         st.subheader(f"📈 Price & Indicators for {ticker}")
-        
-        # Check and plot Close + SMA
-        required_sma_cols = ["Close", "SMA_20", "SMA_50"]
-        if all(col in stock_data.columns for col in required_sma_cols):
-            st.line_chart(stock_data[required_sma_cols].dropna())
-        else:
-            st.error(f"Missing SMA columns: {[col for col in required_sma_cols if col not in stock_data.columns]}")
-
-        # Check and plot RSI
-        if "RSI" in stock_data.columns:
+        try:
+            st.line_chart(stock_data[["Close", "SMA_20", "SMA_50"]].dropna())
             st.line_chart(stock_data[["RSI"]].dropna())
-        else:
-            st.error("Missing RSI column.")
-
-        # Check and plot MACD
-        if "MACD" in stock_data.columns:
             st.line_chart(stock_data[["MACD"]].dropna())
-        else:
-            st.error("Missing MACD column.")
-
-        # Check and plot Volume
-        if "Volume" in stock_data.columns:
             st.bar_chart(stock_data[["Volume"]].dropna())
-        else:
-            st.error("Missing Volume column.")
+        except KeyError as e:
+            st.error(f"Chart rendering failed due to missing data: {e}")
+            st.dataframe(stock_data.head())
 
-        # Load and display politician data
-        pol_data = load_politician_data()
-        if not pol_data.empty:
-            pol_data_ticker = pol_data[pol_data["ticker"].str.upper() == ticker]
-            st.subheader(f"🧑‍⚖️ Trades by Top 10 Politicians in {ticker}")
-            st.dataframe(pol_data_ticker.sort_values(by="transaction_date", ascending=False))
-        else:
-            st.warning("⚠️ No politician trade data found.")
+    # Load and display relevant politician trades
+    pol_data = load_politician_data()
+    if not pol_data.empty:
+        pol_data_ticker = pol_data[pol_data["ticker"] == ticker]
+        st.subheader(f"🧑‍⚖️ Trades by Top 10 Politicians in {ticker}")
+        st.dataframe(pol_data_ticker.sort_values(by="transaction_date", ascending=False))
+    else:
+        st.warning("No politician trade data found.")
