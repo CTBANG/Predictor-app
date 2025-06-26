@@ -38,7 +38,10 @@ def get_stock_data(ticker, period="6mo"):
 
     # Flatten columns if multi-indexed
     if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
+        df.columns = df.columns.get_level_values(-1)
+
+    # Remove duplicate columns if present
+    df = df.loc[:, ~df.columns.duplicated()]
 
     required_cols = {"Close", "Volume"}
     if not required_cols.issubset(df.columns):
