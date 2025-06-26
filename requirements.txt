@@ -1,9 +1,9 @@
 streamlit
 pandas
 yfinance
-plotly
 scikit-learn
-transformers
-vaderSentiment
-newsapi-python
 joblib
+plotly
+vaderSentiment
+transformers
+newsapi-python
